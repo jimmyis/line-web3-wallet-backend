@@ -3,11 +3,25 @@ import express, { Express, Router, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+dotenv.config();
+
 import compression from 'compression';
 import Package, { version, latestUpdate } from './package.json';
 import corsConfig from './configs/cors';
 
-dotenv.config();
+import { initializeApp, applicationDefault, cert } from 'firebase-admin/app';
+import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
+const FirebaseServiceAccount = JSON.parse((process.env.FIREBASE_SERVICE_ACCOUNT as string)) || throwError("Invalid Firebase Service Account not found");
+
+
+export function throwError(error: any) {
+  throw error
+}
+
+initializeApp({ credential: cert(FirebaseServiceAccount) });
+
+const db = getFirestore();
+
 
 const PORT = process.env.PORT || 3000;
 const app: Express = express();
@@ -41,8 +55,19 @@ function healthcheckHandler(req: Request, res: Response) {
 
 const router: Router = express.Router();
 
+router.all("/user/get-wallet", getWalletHandler);
 app.use(router);
 
+
+async function getWalletHandler(req: Request, res: Response) {
+  const data_ = await firestoreGetLINEUserWallet(req.body.userId)
+  res.json(data_)
+}
+
+async function firestoreGetLINEUserWallet(LINEUserId: string) {
+  const doc = await db.collection('users:line').doc(LINEUserId).get()
+  return { ...doc.data() || {} }
+}
 
 
 
