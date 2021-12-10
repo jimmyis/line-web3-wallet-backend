@@ -1,6 +1,7 @@
 const $whitelist = [
   `https://hoppscotch.io`,
-  `https://proxy.hoppscotch.io`
+  `https://proxy.hoppscotch.io`,
+  `https://line-web3-wallet.web.app`
 ]
   
 export default function (whitelist: string[], options?: any) {
