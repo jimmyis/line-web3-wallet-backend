@@ -13,6 +13,8 @@ import { initializeApp, applicationDefault, cert } from 'firebase-admin/app';
 import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 const FirebaseServiceAccount = JSON.parse((process.env.FIREBASE_SERVICE_ACCOUNT as string)) || throwError("Invalid Firebase Service Account not found");
 
+import { ethers } from 'ethers';
+import keccak from 'keccak';
 
 export function throwError(error: any) {
   throw error
@@ -56,17 +58,35 @@ function healthcheckHandler(req: Request, res: Response) {
 const router: Router = express.Router();
 
 router.all("/user/get-wallet", getWalletHandler);
+router.post("/user/create-wallet", createWalletHandler);
 app.use(router);
 
 
 async function getWalletHandler(req: Request, res: Response) {
-  const data_ = await firestoreGetLINEUserWallet(req.body.userId)
-  res.json(data_)
+  const userID = req.body.userID || throwError("Must include a valid ser ID")
+  if (!userID) return res.send(null)
+  
+  const data_ = await firestoreGetLINEUserWallet(userID)
+  if (!data_) return res.send()
+  return res.json({ address: data_?.wallet?.address })
 }
 
 async function firestoreGetLINEUserWallet(LINEUserId: string) {
-  const doc = await db.collection('users:line').doc(LINEUserId).get()
-  return { ...doc.data() || {} }
+  try {
+    if (!LINEUserId) return {}
+    const { user_id } =  ((await db.collection('user_id_link:line').doc(LINEUserId).get()).data() as any)
+
+    if (!user_id) {
+      return {}
+    }
+    const doc = await db.collection('user:wallet').doc(user_id).get()
+    
+    return { ...doc.data() || {} }
+  } catch (error) {
+    console.error(error);
+    return {}
+  }
+}
 }
 
 
