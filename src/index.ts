@@ -71,6 +71,21 @@ async function getWalletHandler(req: Request, res: Response) {
   return res.json({ address: data_?.wallet?.address })
 }
 
+async function createWalletHandler(req: Request, res: Response) {
+  const userID = req.body.userID
+  const pin = req.body.pins
+  const passcode_hash = hashCreate(userID, pin);
+  
+  // Check for existed wallet
+  const _data = await firestoreGetLINEUserWallet(userID);
+  if (_data.wallet) return res.end(null);
+  
+  // Create a wallet
+  const wallet_ = await createWallet_V1(pin);
+  await firestoreStoreLINEUserWallet(userID, wallet_, passcode_hash);
+  res.json({ address: wallet_?.address });
+}
+
 async function firestoreGetLINEUserWallet(LINEUserId: string) {
   try {
     if (!LINEUserId) return {}
@@ -87,6 +102,56 @@ async function firestoreGetLINEUserWallet(LINEUserId: string) {
     return {}
   }
 }
+
+interface SecureWallet {
+  version: string,
+  encryptedJsonWallet: string,
+  timestamp: number
+}
+
+async function firestoreStoreLINEUserWallet(LINEUserId: string, secureWallet: SecureWallet, passcode_hash: string) {
+  try {
+    const user_id = hashCreate(LINEUserId)
+    const docRefUserWallet = db.collection('user:wallet').doc(user_id);
+  
+    await docRefUserWallet.set({
+      wallet: secureWallet,
+      passcode_hash
+    })
+
+    const docRefUserLine = db.collection('user_id_link:line').doc(LINEUserId);
+    await docRefUserLine.set({
+      user_id
+    })
+
+  } catch (error) {
+    console.error(error);
+  }
+
+}
+
+async function createWallet_V1(passkey: string) {
+  const wallet_ = ethers.Wallet.createRandom();
+  const encryptedJsonWallet = await wallet_.encrypt(passkey);
+  return {
+    version: "1",
+    address: wallet_.address.toLowerCase(),
+    encryptedJsonWallet,
+    timestamp: new Date().getTime()
+  }
+}
+
+function hashCreate(...args: string[]) {
+  const digest_ = args.join("");
+  return keccak('keccak256').update(digest_).digest('hex');
+}
+
+async function passcodeHashCheck(LINEuserID: string, passcode: string) {
+  const _data = await firestoreGetLINEUserWallet(LINEuserID);
+  if (_data.passcode_hash) {
+    if (_data.passcode_hash === hashCreate(LINEuserID, passcode)) return true
+  }
+  return false
 }
 
 
